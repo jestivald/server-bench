@@ -11,11 +11,9 @@
   <sub>One command. Beautiful output. All the info you need.</sub>
 </p>
 
----
-
 ## ⚡ Quick Start
 
-Run on any server — no installation needed:
+Run on any server, no installation needed:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh)
@@ -33,9 +31,7 @@ Save results to file:
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick 2>&1 | tee /tmp/bench-results.txt
 ```
 
-> 📦 Dependencies (sysbench, fio, dnsutils, etc.) are installed automatically on first run.
-
----
+> Dependencies (sysbench, fio, dnsutils, etc.) are installed automatically on first run.
 
 ## 🧪 What It Tests
 
@@ -52,33 +48,29 @@ bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/se
 | 📸 Instagram | `--instagram` | Instagram audio block check | ~30s |
 | 🛡️ DPI Check | `--dpi` | DPI censorship check (for RU servers) | ~1min |
 
----
-
-## 🎯 Usage Examples
+## 🎯 Usage
 
 ```bash
-# Full test suite (everything)
+# full test suite
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --all
 
-# Quick health check
+# quick health check
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick
 
-# Only system info and disk
+# pick what you need
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --info --disk
 
-# Only IP checks
+# ip checks only
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --ip
 
-# Only speed tests
+# speed tests only
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --speed
 
-# Show help
+# help
 bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --help
 ```
 
-> 💡 Flags can be combined: `--info --disk --network`
-
----
+Flags can be combined: `--info --disk --network`
 
 ## 📸 Sample Output
 
@@ -121,24 +113,14 @@ bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/se
 ════════════════════════════════════════════════════
 ```
 
----
-
 ## 📋 Requirements
 
 - Linux (Ubuntu, Debian, CentOS, Fedora)
 - Root or sudo access
-- `curl` or `wget`
+- curl or wget
 
 Everything else is auto-installed.
 
----
-
-## 🤝 Contributing
-
-Found a bug or want to add a test? Open an issue or PR!
-
----
-
 ## 📄 License
 
-MIT — use it however you want.
+MIT
