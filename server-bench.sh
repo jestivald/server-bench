@@ -21,6 +21,47 @@
 set -euo pipefail
 
 # ═══════════════════════════════════════════════════════════════
+# AUTO-INSTALL DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════
+install_deps() {
+    local needed=()
+    local pkg_map=(
+        "sysbench:sysbench"
+        "fio:fio"
+        "dig:dnsutils"
+        "curl:curl"
+        "wget:wget"
+        "ping:iputils-ping"
+        "jq:jq"
+    )
+
+    for entry in "${pkg_map[@]}"; do
+        local cmd="${entry%%:*}"
+        local pkg="${entry##*:}"
+        if ! command -v "$cmd" &>/dev/null; then
+            needed+=("$pkg")
+        fi
+    done
+
+    if [[ ${#needed[@]} -gt 0 ]]; then
+        echo -e "\033[0;34mℹ\033[0m Installing missing packages: ${needed[*]}"
+        if command -v apt-get &>/dev/null; then
+            sudo apt-get update -qq &>/dev/null
+            sudo apt-get install -y -qq "${needed[@]}" &>/dev/null
+        elif command -v yum &>/dev/null; then
+            sudo yum install -y -q "${needed[@]}" &>/dev/null
+        elif command -v dnf &>/dev/null; then
+            sudo dnf install -y -q "${needed[@]}" &>/dev/null
+        else
+            echo -e "\033[1;33m⚠\033[0m Could not auto-install. Please install manually: ${needed[*]}"
+        fi
+        echo -e "\033[0;32m✔\033[0m Dependencies installed"
+    fi
+}
+
+install_deps
+
+# ═══════════════════════════════════════════════════════════════
 # COLORS & FORMATTING
 # ═══════════════════════════════════════════════════════════════
 if [[ -t 1 ]]; then
@@ -222,7 +263,7 @@ test_system_info() {
             fi
         fi
     else
-        status_info "Install sysbench for CPU benchmark: apt install sysbench"
+        status_warn "sysbench not available (auto-install failed?)"
     fi
 
     # Memory
@@ -316,7 +357,7 @@ test_disk() {
         kv "4K Random Read:" "${iops} IOPS" "$YELLOW"
         rm -f "$test_file"
     else
-        status_info "Install fio for random I/O test: apt install fio"
+        status_warn "fio not available (auto-install failed?)"
     fi
 }
 
