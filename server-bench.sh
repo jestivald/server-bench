@@ -44,18 +44,34 @@ install_deps() {
     done
 
     if [[ ${#needed[@]} -gt 0 ]]; then
-        echo -e "\033[0;34mℹ\033[0m Installing missing packages: ${needed[*]}"
+        echo -e "\033[0;34mℹ\033[0m Missing packages: ${needed[*]}"
         if command -v apt-get &>/dev/null; then
+            echo -ne "\033[0;90m  ⏳ Updating package list...\033[0m"
             sudo apt-get update -qq &>/dev/null
-            sudo apt-get install -y -qq "${needed[@]}" &>/dev/null
+            echo -e "\r\033[0;32m  ✔ Package list updated      \033[0m"
+            for pkg in "${needed[@]}"; do
+                echo -ne "\033[0;90m  ⏳ Installing ${pkg}...\033[0m"
+                sudo apt-get install -y -qq "$pkg" &>/dev/null
+                echo -e "\r\033[0;32m  ✔ ${pkg} installed        \033[0m"
+            done
         elif command -v yum &>/dev/null; then
-            sudo yum install -y -q "${needed[@]}" &>/dev/null
+            for pkg in "${needed[@]}"; do
+                echo -ne "\033[0;90m  ⏳ Installing ${pkg}...\033[0m"
+                sudo yum install -y -q "$pkg" &>/dev/null
+                echo -e "\r\033[0;32m  ✔ ${pkg} installed        \033[0m"
+            done
         elif command -v dnf &>/dev/null; then
-            sudo dnf install -y -q "${needed[@]}" &>/dev/null
+            for pkg in "${needed[@]}"; do
+                echo -ne "\033[0;90m  ⏳ Installing ${pkg}...\033[0m"
+                sudo dnf install -y -q "$pkg" &>/dev/null
+                echo -e "\r\033[0;32m  ✔ ${pkg} installed        \033[0m"
+            done
         else
             echo -e "\033[1;33m⚠\033[0m Could not auto-install. Please install manually: ${needed[*]}"
         fi
-        echo -e "\033[0;32m✔\033[0m Dependencies installed"
+        echo -e "\033[0;32m✔\033[0m All dependencies ready"
+    else
+        echo -e "\033[0;32m✔\033[0m All dependencies already installed"
     fi
 }
 
@@ -196,7 +212,6 @@ START_TIME=$(date +%s)
 # BANNER
 # ═══════════════════════════════════════════════════════════════
 show_banner() {
-    clear 2>/dev/null || true
     echo ""
     printf "${BOLD}${CYAN}"
     cat << 'BANNER'
@@ -324,6 +339,7 @@ test_disk() {
     local test_file="$TMPDIR/disk_bench"
 
     section "Write Speed"
+    status_info "Writing 512MB test file..."
     # Write test with dd
     local write_result
     write_result=$(dd if=/dev/zero of="$test_file" bs=1M count=512 conv=fdatasync 2>&1 | tail -1)
@@ -333,6 +349,7 @@ test_disk() {
     rm -f "$test_file"
 
     section "Read Speed"
+    status_info "Reading 512MB test file..."
     # Create test file
     dd if=/dev/zero of="$test_file" bs=1M count=512 2>/dev/null
     # Clear cache
@@ -348,6 +365,7 @@ test_disk() {
     # fio if available
     if command_exists fio; then
         section "Random I/O (fio)"
+        status_info "Running 4K random read test (10 sec)..."
         local fio_result
         fio_result=$(fio --name=randtest --ioengine=libaio --iodepth=32 --rw=randread --bs=4k \
             --direct=1 --size=256M --numjobs=1 --runtime=10 --group_reporting \
