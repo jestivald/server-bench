@@ -140,10 +140,21 @@ Local modules (info/disk/network/security/docker) are self-contained and use
 `sysbench`, `fio`, `dd`, `ping`, `dig` directly.
 
 > ⚠️ External modules download and execute third-party scripts. That is the
-> nature of this tool — audit the upstreams above if your threat model
-> requires it, or stick to local modules.
+> nature of this tool — all upstreams were security-audited (no backdoors,
+> no exfiltration, no persistence): see **[docs/UPSTREAM-AUDIT.md](docs/UPSTREAM-AUDIT.md)**
+> (snapshot 2026-07-06, with hashes). If your threat model can't accept
+> executing live upstream copies, stick to local modules.
 
 ## 📝 Changelog
+
+**v2.2** — 2026-07-06
+- External scripts get **"y" auto-answered** — no more hanging or dying on "continue? [y/n]" prompts (dependency installs are confirmed for you)
+- If an upstream endpoint returns an HTML page or the script dies right after start, server-bench now **fails over to the mirror** (bench.gig.ovh root became an HTML page — RU speed test now runs bench.tlab.pw first)
+- **⚡ Scorecard**: the structured report opens with a one-screen summary — CPU/RAM/disk/network/IP/security at a glance
+- IP.Check.Place is called with **`-p` (privacy)**: your report is no longer uploaded to upload.check.place for a public share link (+`-y` for deps)
+- Progress spinners of captured scripts no longer flood the report or the saved log (proper `\r` emulation)
+- Disk-usage table cleaned of tmpfs/docker-overlay noise; Docker status column no longer truncated mid-word; DNS shows `<1ms` instead of `0ms`
+- **Security audit of all upstream scripts** — [docs/UPSTREAM-AUDIT.md](docs/UPSTREAM-AUDIT.md)
 
 **v2.1** — 2026-07-06
 - **Report mode**: multi-module runs now show a progress checklist with percentage instead of scrolling output, then print a structured report at the end (local modules replayed in full, speed tests condensed to their result tables, IP check to key findings)

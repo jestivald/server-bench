@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2059,SC2317,SC2329,SC1091
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  Server Benchmark Suite v2.1                                 ║
+# ║  Server Benchmark Suite v2.2                                 ║
 # ║  All-in-one server diagnostics & performance testing        ║
 # ╚══════════════════════════════════════════════════════════════╝
 #
@@ -33,7 +33,7 @@
 # Author: jestivald (generated with Claude)
 # License: MIT
 
-VERSION="2.1.0"
+VERSION="2.2.0"
 
 set -u
 
@@ -222,10 +222,15 @@ stop_ticker() {
 # ═══════════════════════════════════════════════════════════════
 # JSON OUTPUT (--json, local modules only)
 # ═══════════════════════════════════════════════════════════════
+declare -a REC_KEYS=()
+declare -a REC_VALS=()
+
 record() {
-    # record key value [num]
-    [[ $JSON_MODE -eq 1 ]] || return 0
+    # record key value [num] — kept for the scorecard, mirrored to --json
     local k="$1" v="${2:-}" t="${3:-str}"
+    REC_KEYS+=("$k")
+    REC_VALS+=("$v")
+    [[ $JSON_MODE -eq 1 ]] || return 0
     if [[ "$t" == "num" ]]; then
         if [[ "$v" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
             JSON_KV+=("\"$k\":$v")
@@ -246,6 +251,18 @@ emit_json() {
     printf '{%s}\n' "${JSON_KV[*]-}" >&3
 }
 
+rec_get() {
+    # last recorded value for a key (empty + rc 1 when absent)
+    local i
+    for (( i = ${#REC_KEYS[@]} - 1; i >= 0; i-- )); do
+        if [[ "${REC_KEYS[$i]}" == "$1" ]]; then
+            printf '%s' "${REC_VALS[$i]}"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # ═══════════════════════════════════════════════════════════════
 # MISC HELPERS
 # ═══════════════════════════════════════════════════════════════
@@ -261,7 +278,14 @@ cleanup() {
 }
 
 strip_ansi() {
-    sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' -e 's/\r$//' -e 's/\r/\n/g'
+    # strip colors + emulate the terminal for \r progress spinners:
+    # of every \r-overwritten chain keep only the final visible text
+    sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' \
+        | awk '{
+            n = split($0, a, "\r"); out = ""
+            for (i = 1; i <= n; i++) if (a[i] != "") out = a[i]
+            print out
+        }'
 }
 
 mod_log() {
@@ -367,25 +391,40 @@ ensure_deps() {
 # ═══════════════════════════════════════════════════════════════
 run_external() {
     # run_external "label" timeout_sec url [args...]
-    # returns 1 only when FETCH failed (caller may try a mirror);
-    # a timed-out or partially-failed run is reported but not retried.
+    # Interactive prompts are auto-answered "y" (some scripts ask before
+    # installing speedtest binaries). Returns 1 when the script could not be
+    # fetched OR died within seconds (caller may try a mirror); a timed-out
+    # or long partial run is reported but not retried.
     local label="$1" tmo="$2" url="$3"
     shift 3
-    local body
+    local body t0=$SECONDS rc
     status_info "Fetching ${label}..."
     if ! body=$(curl -fsSL --connect-timeout 10 --max-time 60 "$url" 2>/dev/null) || [[ -z "$body" ]]; then
         status_warn "${label}: could not fetch script"
         return 1
     fi
+    if [[ "$body" == \<* ]]; then
+        # endpoint serves an HTML page instead of a script (happens when
+        # upstream turns the root URL into an info page) — try a mirror
+        status_warn "${label}: endpoint returned HTML, not a script"
+        return 1
+    fi
     echo ""
-    timeout --foreground -k 15 "$tmo" bash <(printf '%s\n' "$body") "$@" </dev/null
-    local rc=$?
+    yes y 2>/dev/null | timeout --foreground -k 15 "$tmo" bash <(printf '%s\n' "$body") "$@"
+    rc=$?
     case $rc in
         0) return 0 ;;
-        124|137) status_fail "${label}: timed out after ${tmo}s" ;;
-        *)       status_warn "${label}: exited with code ${rc}" ;;
+        124|137)
+            status_fail "${label}: timed out after ${tmo}s"
+            return 0 ;;
+        *)
+            if [[ $((SECONDS - t0)) -lt 10 ]]; then
+                status_warn "${label}: died right after start (code ${rc}) — trying a mirror if available"
+                return 1
+            fi
+            status_warn "${label}: exited with code ${rc}"
+            return 0 ;;
     esac
-    return 0
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -526,8 +565,13 @@ test_system_info() {
     section "Disk Usage"
     printf "  ${GRAY}%-20s %-8s %-8s %-8s %-6s${RESET}\n" "MOUNT" "SIZE" "USED" "AVAIL" "USE%"
     line
-    df -h --output=target,size,used,avail,pcent 2>/dev/null \
-        | grep -vE '^Mounted|tmpfs|devtmpfs|udev|efivarfs' \
+    df -h --output=target,fstype,size,used,avail,pcent 2>/dev/null \
+        | awk 'NR == 1 {next}
+               $2 ~ /^(tmpfs|devtmpfs|ramfs|squashfs|efivarfs|vfat)$/ {next}
+               $1 ~ /^\/(dev|run|sys|proc)(\/|$)/ {next}
+               $1 ~ /^\/var\/lib\/docker\// {next}
+               $1 ~ /^\/snap(\/|$)/ {next}
+               {print $1, $3, $4, $5, $6}' \
         | while read -r mount size used avail pct; do
             local pct_num=${pct%\%}
             local color="$GREEN"
@@ -817,10 +861,11 @@ test_network() {
             [[ "$dns_ms" =~ ^[0-9]+$ ]] || dns_ms=""
         fi
         if [[ -n "$resolved" ]]; then
-            local color="$GREEN"
-            [[ ${dns_ms:-0} -gt 100 ]] && color="$YELLOW"
-            [[ ${dns_ms:-0} -gt 500 ]] && color="$RED"
-            printf "  ${CHECK} %-22s ${color}%sms${RESET}  ${DIM}→ %s${RESET}\n" "$domain" "${dns_ms:-?}" "$resolved"
+            local color="$GREEN" dns_disp="${dns_ms:-?}"
+            [[ ${dns_ms:-0} -gt 100 ]] 2>/dev/null && color="$YELLOW"
+            [[ ${dns_ms:-0} -gt 500 ]] 2>/dev/null && color="$RED"
+            [[ "$dns_ms" == "0" ]] && dns_disp="<1"
+            printf "  ${CHECK} %-22s ${color}%sms${RESET}  ${DIM}→ %s${RESET}\n" "$domain" "$dns_disp" "$resolved"
             record "dns_${domain//./_}_ms" "$dns_ms" num
         else
             printf "  ${CROSS} %-22s ${RED}FAILED${RESET}\n" "$domain"
@@ -963,10 +1008,12 @@ test_docker() {
             grep -qE 'unhealthy|Restarting' <<<"$status" && color="$RED"
             [[ ${#name} -gt 26 ]] && name="${name:0:23}..."
             [[ ${#image} -gt 28 ]] && image="${image:0:25}..."
-            local short_ports
+            local short_ports status_short
             short_ports=$(sed 's/0\.0\.0\.0://g; s/\[::\]:[0-9]*->[0-9]*\/[a-z]*//g; s/, *$//' <<<"$ports" | cut -c1-14)
+            status_short=$(sed -E 's/ \((healthy|unhealthy)\)//' <<<"$status")
+            status_short="${status_short:0:18}"
             printf "  ${WHITE}%-28s${RESET} ${color}%-18s${RESET} %-14s ${DIM}%s${RESET}\n" \
-                "$name" "$(cut -d' ' -f1-2 <<<"$status")" "$short_ports" "$image"
+                "$name" "$status_short" "$short_ports" "$image"
         done
 
     local total running
@@ -990,7 +1037,9 @@ test_docker() {
 test_ip_check() {
     header "IP QUALITY CHECK" "IP reputation & service blocks (IP.Check.Place)"
     [[ $HIDE_IP -eq 1 ]] && status_warn "--hide-ip does not apply to external scripts — output will show the real IP"
-    run_external "IP.Check.Place" 900 "https://ip.check.place" -l en \
+    # -y: auto-confirm dependency install; -p: privacy mode — do NOT upload
+    # the report to upload.check.place / generate a public share link
+    run_external "IP.Check.Place" 900 "https://ip.check.place" -l en -y -p \
         || status_fail "IP.Check.Place unavailable"
 }
 
@@ -1003,8 +1052,11 @@ test_ip_region() {
 
 test_speed_ru() {
     header "SPEED TEST — RUSSIA" "Connectivity to Russian providers"
-    run_external "bench.gig.ovh" 1800 "http://bench.gig.ovh" \
-        || run_external "bench.tlab.pw" 1800 "http://bench.tlab.pw" \
+    # bench.tlab.pw: iperf3 to RU providers (SPB Er-Telecom, Moscow MTS, Omsk).
+    # bench.gig.ovh root currently serves an HTML info page — kept as a
+    # fallback in case the script returns there.
+    run_external "bench.tlab.pw" 1800 "http://bench.tlab.pw" \
+        || run_external "bench.gig.ovh" 1800 "http://bench.gig.ovh" \
         || status_fail "RU speed test unavailable"
 }
 
@@ -1131,6 +1183,61 @@ report_kind() {
     esac
 }
 
+scorecard() {
+    # at-a-glance summary assembled from recorded metrics
+    header "⚡ SCORECARD" "the server at a glance"
+    local v line city country
+
+    line=""
+    v=$(rec_get cpu_model) && [[ -n "$v" ]] && line="$v"
+    v=$(rec_get cpu_cores) && [[ -n "$v" ]] && line="${line:+$line · }${v} core(s)"
+    v=$(rec_get cpu_eps_1t) && [[ -n "$v" ]] && line="${line:+$line · }${v%%.*} eps"
+    v=$(rec_get cpu_steal_pct) && [[ -n "$v" ]] && line="${line:+$line · }steal ${v}%"
+    [[ -n "$line" ]] && kv "CPU:" "$line" "$YELLOW"
+
+    v=$(rec_get mem_total_mb)
+    if [[ "$v" =~ ^[0-9]+$ ]]; then
+        local avail
+        avail=$(rec_get mem_avail_mb) || avail=0
+        kv "Memory:" "$(awk -v t="$v" -v a="${avail:-0}" \
+            'BEGIN{printf "%.1fG total · %.1fG available", t / 1024, a / 1024}')"
+    fi
+
+    line=""
+    v=$(rec_get disk_seq_write_mbs) && [[ -n "$v" ]] && line="W ${v} MB/s"
+    v=$(rec_get disk_seq_read_mbs) && [[ -n "$v" ]] && line="${line:+$line · }R ${v} MB/s"
+    v=$(rec_get disk_rand_read_iops) && [[ -n "$v" ]] && line="${line:+$line · }4K $(fmt_iops "$v") IOPS"
+    [[ -n "$line" ]] && kv "Disk:" "$line" "$YELLOW"
+
+    line=""
+    v=$(rec_get tcp_cc) && [[ -n "$v" ]] && line="$v"
+    v=$(rec_get qdisc) && [[ -n "$v" ]] && line="${line:+$line+}$v"
+    v=$(rec_get ping_cloudflare_avg_ms) && [[ -n "$v" ]] && line="${line:+$line · }CF ${v}ms"
+    v=$(rec_get ping_yandex_avg_ms) && [[ -n "$v" ]] && line="${line:+$line · }Yandex ${v}ms"
+    [[ -n "$line" ]] && kv "Network:" "$line" "$GREEN"
+
+    line=""
+    city=$(rec_get geo_city) || city=""
+    country=$(rec_get geo_country) || country=""
+    v=$(rec_get ipv4) && [[ -n "$v" && "$v" != "N/A" ]] && line="$v"
+    v=$(rec_get isp) && [[ -n "$v" ]] && line="${line:+$line · }$v"
+    [[ -n "$city$country" ]] && line="${line:+$line · }${city:-?}, ${country:-?}"
+    [[ -n "$line" ]] && kv "IP:" "$line" "$CYAN"
+
+    line=""
+    v=$(rec_get ssh_root_login) && [[ -n "$v" ]] && line="root: $v"
+    v=$(rec_get ssh_password_auth) && [[ -n "$v" ]] && line="${line:+$line · }passwords: $v"
+    v=$(rec_get fail2ban) && [[ -n "$v" ]] && line="${line:+$line · }fail2ban: $v"
+    v=$(rec_get pending_updates) && [[ -n "$v" ]] && line="${line:+$line · }updates: $v"
+    [[ -n "$line" ]] && kv "Security:" "$line"
+
+    local dr dt
+    dr=$(rec_get docker_running) || dr=""
+    dt=$(rec_get docker_total) || dt=""
+    [[ -n "$dr" && -n "$dt" ]] && kv "Docker:" "${dr}/${dt} running"
+    return 0
+}
+
 save_report() {
     # concatenate all captured logs, ANSI-stripped, into a plain-text file
     local dir="" d f title
@@ -1141,6 +1248,7 @@ save_report() {
     f="${dir%/}/server-bench-$(date +%Y%m%d-%H%M%S).log"
     {
         printf 'server-bench v%s — full report — %s\n' "$VERSION" "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+        [[ -s "$TMPDIR/scorecard.txt" ]] && strip_ansi <"$TMPDIR/scorecard.txt"
         local title
         for title in ${DONE_TITLES[@]+"${DONE_TITLES[@]}"}; do
             [[ -s "$(mod_log "$title")" ]] && strip_ansi <"$(mod_log "$title")"
@@ -1150,12 +1258,18 @@ save_report() {
 }
 
 final_report() {
+    if [[ ${#REC_KEYS[@]} -gt 0 ]]; then
+        scorecard >"$TMPDIR/scorecard.txt"
+    else
+        : >"$TMPDIR/scorecard.txt"
+    fi
     save_report
     local title log lines
     echo ""
     double_line
     printf "${BOLD}${WHITE}  📋 STRUCTURED REPORT${RESET}\n"
     double_line
+    [[ -s "$TMPDIR/scorecard.txt" ]] && cat "$TMPDIR/scorecard.txt"
     for title in ${DONE_TITLES[@]+"${DONE_TITLES[@]}"}; do
         log=$(mod_log "$title")
         [[ -s "$log" ]] || continue
@@ -1164,7 +1278,7 @@ final_report() {
                 cat "$log"
                 ;;
             external)
-                sed -e 's/\r$//' -e 's/\r/\n/g' "$log"
+                strip_ansi <"$log"
                 ;;
             speed)
                 header "$(tr '[:lower:]' '[:upper:]' <<<"$title") — KEY RESULTS" "full output in the report file"
