@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2059,SC2329,SC1091
+# shellcheck disable=SC2059,SC2317,SC2329,SC1091
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  Server Benchmark Suite v2.0                                 ║
 # ║  All-in-one server diagnostics & performance testing        ║
