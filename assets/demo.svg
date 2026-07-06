@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 700" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace" font-size="13" xml:space="preserve">
+  <!-- terminal window -->
+  <rect width="660" height="700" rx="12" fill="#161821"/>
+  <rect width="660" height="36" rx="12" fill="#20232e"/>
+  <rect y="22" width="660" height="14" fill="#20232e"/>
+  <circle cx="24" cy="18" r="6" fill="#ff5f57"/>
+  <circle cx="44" cy="18" r="6" fill="#febc2e"/>
+  <circle cx="64" cy="18" r="6" fill="#28c840"/>
+  <text x="330" y="22" text-anchor="middle" fill="#8a91a3" font-size="11">server-bench — root@vps</text>
+
+  <!-- session -->
+  <text x="24" y="66" fill="#8a91a3">$ <tspan fill="#d4d9e4">bash server-bench.sh --quick</tspan></text>
+
+  <text x="24" y="104" fill="#56b6c2">   ╔═╗┌─┐┬─┐┬  ┬┌─┐┬─┐  ╔╗ ┌─┐┌┐┌┌─┐┬ ┬</text>
+  <text x="24" y="123" fill="#56b6c2">   ╚═╗├┤ ├┬┘└┐┌┘├┤ ├┬┘  ╠╩╗├┤ ││││  ├─┤</text>
+  <text x="24" y="142" fill="#56b6c2">   ╚═╝└─┘┴└─ └┘ └─┘┴└─  ╚═╝└─┘┘└┘└─┘┴ ┴</text>
+  <text x="24" y="161" fill="#565e6f">   v2.0.0 • all-in-one server diagnostics • 2026-07-06</text>
+
+  <text x="24" y="199" fill="#6597e2">════════════════════════════════════════════════════════</text>
+  <text x="24" y="218" fill="#eceff4" font-weight="bold">  SYSTEM INFORMATION</text>
+  <text x="24" y="237" fill="#6597e2">════════════════════════════════════════════════════════</text>
+
+  <text x="24" y="275" fill="#56b6c2" font-weight="bold">  ┌─ CPU</text>
+  <text x="24" y="294" fill="#8a91a3">  Model:                 <tspan fill="#e5c07b">AMD EPYC 7763 64-Core</tspan></text>
+  <text x="24" y="313" fill="#8a91a3">  Cores:                 <tspan fill="#d4d9e4">4</tspan>          AES-NI: <tspan fill="#98c379">yes</tspan></text>
+  <text x="24" y="332" fill="#8a91a3">  CPU steal:             <tspan fill="#98c379">0.3%</tspan></text>
+  <text x="24" y="351" fill="#8a91a3">  Single-thread:         <tspan fill="#e5c07b">3412.88 events/sec</tspan></text>
+  <text x="24" y="370" fill="#98c379">  ✔ <tspan fill="#d4d9e4">Excellent CPU performance (dedicated core likely)</tspan></text>
+
+  <text x="24" y="408" fill="#56b6c2" font-weight="bold">  ┌─ TCP Stack</text>
+  <text x="24" y="427" fill="#8a91a3">  Congestion control:    <tspan fill="#98c379">bbr</tspan></text>
+  <text x="24" y="446" fill="#8a91a3">  Default qdisc:         <tspan fill="#98c379">fq</tspan></text>
+  <text x="24" y="465" fill="#8a91a3">  MTU (eth0):            <tspan fill="#d4d9e4">1500</tspan></text>
+
+  <text x="24" y="503" fill="#56b6c2" font-weight="bold">  ┌─ Ping Latency</text>
+  <text x="24" y="522" fill="#d4d9e4">  Cloudflare (1.1.1.1)   <tspan fill="#98c379">1.1ms</tspan>     Yandex (77.88.8.8)  <tspan fill="#e5c07b">36.4ms</tspan></text>
+
+  <text x="24" y="560" fill="#98c379">  ✔ <tspan fill="#d4d9e4">Root login: key only</tspan>          ✔ <tspan fill="#d4d9e4">Fail2ban: active (2 jails)</tspan></text>
+  <text x="24" y="579" fill="#98c379">  ✔ <tspan fill="#d4d9e4">Password auth disabled</tspan>        ✔ <tspan fill="#d4d9e4">UFW: active</tspan></text>
+
+  <text x="24" y="617" fill="#6597e2">════════════════════════════════════════════════════════</text>
+  <text x="24" y="636" fill="#98c379" font-weight="bold">  ✔ All tests completed in 1m 04s  <tspan fill="#565e6f" font-weight="normal">(0 failed, 0 warnings)</tspan></text>
+  <text x="24" y="655" fill="#6597e2">════════════════════════════════════════════════════════</text>
+</svg>

@@ -1,0 +1,19 @@
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 4 * * 1'   # weekly: catch runner/env drift
+
+jobs:
+  local-modules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: full local suite
+        run: bash server-bench.sh --info --disk --network --security --docker --no-color
+      - name: json mode emits valid JSON
+        run: bash server-bench.sh --json --security --no-install 2>/dev/null | python3 -m json.tool

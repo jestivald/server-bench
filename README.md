@@ -1,15 +1,24 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/version-2.0-blueviolet?style=for-the-badge" alt="Version">
-  <img src="https://img.shields.io/badge/bash-4.0+-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white" alt="Bash">
-  <img src="https://img.shields.io/badge/platform-linux-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux">
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="License">
-</p>
-
 <h1 align="center">🚀 Server Bench</h1>
 
 <p align="center">
   <b>All-in-one server diagnostics & performance testing</b><br>
   <sub>One command. Beautiful output. All the info you need to vet a VPS.</sub>
+</p>
+
+<p align="center">
+  <a href="README.ru.md">🇷🇺 Читать по-русски</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/v/tag/jestivald/server-bench?style=for-the-badge&label=version&color=blueviolet" alt="Version">
+  <img src="https://img.shields.io/github/actions/workflow/status/jestivald/server-bench/lint.yml?style=for-the-badge&label=lint" alt="Lint">
+  <img src="https://img.shields.io/github/actions/workflow/status/jestivald/server-bench/smoke.yml?style=for-the-badge&label=smoke%20test" alt="Smoke">
+  <img src="https://img.shields.io/badge/platform-linux-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" alt="License">
+</p>
+
+<p align="center">
+  <img src="assets/demo.svg" alt="server-bench demo" width="680">
 </p>
 
 ## ⚡ Quick Start
@@ -93,51 +102,15 @@ bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/se
  "ssh_password_auth":"no","fail2ban":"yes","fails":0,"warns":1}
 ```
 
-## 📸 Sample Output
-
-```
-   ╔═╗┌─┐┬─┐┬  ┬┌─┐┬─┐  ╔╗ ┌─┐┌┐┌┌─┐┬ ┬
-   ╚═╗├┤ ├┬┘└┐┌┘├┤ ├┬┘  ╠╩╗├┤ ││││  ├─┤
-   ╚═╝└─┘┴└─ └┘ └─┘┴└─  ╚═╝└─┘┘└┘└─┘┴ ┴
-   v2.0.0 • all-in-one server diagnostics
-
-════════════════════════════════════════════════════
-  SYSTEM INFORMATION
-════════════════════════════════════════════════════
-  ┌─ CPU
-  Model:        Intel Xeon E5-2680 v4
-  Cores:        4
-  AES-NI:       yes
-  CPU steal:    0.3%
-  Single-thread: 2847.31 events/sec
-  ✔ Good CPU performance
-
-  ┌─ Network
-  IPv4:         203.0.113.42
-  Location:     Amsterdam, Netherlands
-  ISP:          Example Hosting
-
-  ┌─ TCP Stack
-  Congestion control:  bbr
-  Default qdisc:       fq
-  Outbound port 25:    blocked or filtered
-
-  ┌─ Security
-  ✔ Root login: key only
-  ✔ Password authentication disabled
-  ✔ UFW: active
-  ✔ Fail2ban: active (2 jails)
-
-  ✔ All tests completed in 1m 12s  (0 failed, 1 warnings)
-════════════════════════════════════════════════════
-```
-
 ## 📋 Requirements
 
 - Linux (Debian, Ubuntu, CentOS, Fedora, AlmaLinux, Rocky)
 - bash 4+, curl
 - root **or** sudo recommended (auto-install + privileged checks); runs
   unprivileged too, with some checks skipped
+
+Every push is smoke-tested on a real Ubuntu runner: the full local suite
+(`--info --disk --network --security --docker`) must complete end-to-end.
 
 ## 🔗 Under the Hood
 
@@ -163,14 +136,20 @@ Local modules (info/disk/network/security/docker) are self-contained and use
 
 ## 📝 Changelog
 
-**v2.0**
+**v2.0** — 2026-07-06
 - No more mid-run death: removed fragile `set -e`, every check degrades gracefully; summary shows fail/warn counts and per-module timing
 - Works as plain root without `sudo` installed (typical VPS); never prompts for a password in non-interactive runs
-- Honest disk benchmark: fio with direct I/O and correct package names per distro, test file placed on a real disk-backed filesystem (never tmpfs), free-space guard, dd kept as fallback
+- Honest disk benchmark: fio with direct I/O on a real disk-backed filesystem (never tmpfs), free-space guard, dd kept as fallback
 - Dependencies installed lazily — only what the selected modules need; `--help` no longer touches apt 🙃
 - New: `--yabs`, `--json`, `--hide-ip`, `--no-install`, `--no-color`, `--version`
 - New checks: CPU steal%, virtualization type, AES-NI, multi-thread sysbench, BBR/qdisc/MTU, outbound port 25, packet loss, rDNS, effective sshd config (drop-ins included), nftables
-- External scripts run with timeouts, stderr no longer swallowed; correct yum/dnf package names; CI shellcheck
+- External scripts run with timeouts, stderr no longer swallowed; correct yum/dnf package names; CI: shellcheck + smoke test on a real runner
+
+<details>
+<summary><b>v1.0</b></summary>
+
+- Initial release: system info, dd disk test, ping/DNS, SSH/firewall audit, docker status, wrappers for IP.Check.Place / ipregion / bench.sh / bench.gig.ovh / censorcheck / Instagram checker
+</details>
 
 ## 📄 License
 
