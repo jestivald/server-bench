@@ -45,6 +45,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/se
 > the ones the selected modules actually need. Use `--no-install` to forbid
 > any package installation.
 
+**Report mode (v2.1):** when you run more than one module on a terminal, tests
+execute quietly behind a progress checklist (`[████░░░░] 44% ► speed-ru 2m 14s`),
+and a full **structured report** is printed once everything finishes — no more
+walls of text scrolling past. The complete plain-text report is also saved
+automatically to `./server-bench-<timestamp>.log`. Prefer the old streaming
+output? Add `--live`.
+
 ## 🧪 What It Tests
 
 | Module | Flag | What it does | Time |
@@ -86,6 +93,8 @@ bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/se
 
 | Flag | Effect |
 |:---|:---|
+| `--report` | Progress checklist + structured report at the end + autosave to file (default for multi-module terminal runs) |
+| `--live` | Stream test output live as it happens (default for single-module runs) |
 | `--json` | JSON object to stdout (local modules only), pretty report goes to stderr |
 | `--hide-ip` | Mask public IPs in the report — safe to paste into forums/chats |
 | `--no-install` | Never install packages; tests degrade gracefully |
@@ -135,6 +144,11 @@ Local modules (info/disk/network/security/docker) are self-contained and use
 > requires it, or stick to local modules.
 
 ## 📝 Changelog
+
+**v2.1** — 2026-07-06
+- **Report mode**: multi-module runs now show a progress checklist with percentage instead of scrolling output, then print a structured report at the end (local modules replayed in full, speed tests condensed to their result tables, IP check to key findings)
+- Full plain-text report **auto-saved** to `./server-bench-<timestamp>.log` (ANSI-stripped)
+- `--live` to stream output like before, `--report` to force report mode for a single module
 
 **v2.0** — 2026-07-06
 - No more mid-run death: removed fragile `set -e`, every check degrades gracefully; summary shows fail/warn counts and per-module timing

@@ -17,3 +17,7 @@ jobs:
         run: bash server-bench.sh --info --disk --network --security --docker --no-color
       - name: json mode emits valid JSON
         run: bash server-bench.sh --json --security --no-install 2>/dev/null | python3 -m json.tool
+      - name: report mode saves a file
+        run: |
+          bash server-bench.sh --report --security --no-install
+          ls -la server-bench-*.log

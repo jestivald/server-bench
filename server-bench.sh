@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2059,SC2317,SC2329,SC1091
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  Server Benchmark Suite v2.0                                 ║
+# ║  Server Benchmark Suite v2.1                                 ║
 # ║  All-in-one server diagnostics & performance testing        ║
 # ╚══════════════════════════════════════════════════════════════╝
 #
@@ -20,6 +20,9 @@
 #   --instagram   Instagram audio block check
 #   --dpi         DPI censorship check (for RU servers)
 #   --yabs        YABS (fio + iperf3 + Geekbench 6)
+#   --live        Stream test output live (default for single-module runs)
+#   --report      Progress checklist + structured report at the end
+#                 (default for multi-module runs on a terminal)
 #   --json        Machine-readable output (local modules only)
 #   --hide-ip     Mask public IPs in output (for public pastes)
 #   --no-install  Never install packages, degrade gracefully
@@ -30,7 +33,7 @@
 # Author: jestivald (generated with Claude)
 # License: MIT
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 
 set -u
 
@@ -48,6 +51,16 @@ TMPDIR=""
 DISK_FILE=""
 declare -a JSON_KV=()
 declare -a MODULE_TIMES=()
+
+# report mode (progress checklist + structured report at the end)
+LIVE_MODE=0
+FORCE_REPORT=0
+REPORT_MODE=0
+REPORT_FILE=""
+TICK_PID=""
+TOTAL_MODULES=0
+DONE_MODULES=0
+declare -a DONE_TITLES=()
 
 # Color vars (filled by init_colors)
 RED='' GREEN='' YELLOW='' BLUE='' CYAN='' WHITE='' GRAY=''
@@ -166,6 +179,47 @@ run_quiet() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# PROGRESS TICKER (report mode)
+# ═══════════════════════════════════════════════════════════════
+start_ticker() {
+    # start_ticker "title" done_count total — animated progress line
+    local title="$1" done_n="$2" total="$3"
+    if [[ ! -t 1 ]]; then
+        printf '  … %s — running...\n' "$title"
+        return 0
+    fi
+    (
+        local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+        local i=0 t=0 pct fill bar="" j secs
+        pct=$(( done_n * 100 / total ))
+        fill=$(( done_n * 24 / total ))
+        for (( j = 0; j < 24; j++ )); do
+            if (( j < fill )); then bar+="█"; else bar+="░"; fi
+        done
+        while :; do
+            secs=$(( t / 5 ))
+            printf '\r  %s%s%s [%s] %3d%%  %s►%s %-11s %dm %02ds ' \
+                "$CYAN" "${frames[$i]}" "$RESET" "$bar" "$pct" \
+                "$YELLOW" "$RESET" "$title" $(( secs / 60 )) $(( secs % 60 ))
+            i=$(( (i + 1) % 10 ))
+            t=$(( t + 1 ))
+            sleep 0.2
+        done
+    ) &
+    TICK_PID=$!
+}
+
+stop_ticker() {
+    if [[ -n "$TICK_PID" ]]; then
+        kill "$TICK_PID" 2>/dev/null
+        wait "$TICK_PID" 2>/dev/null
+        TICK_PID=""
+    fi
+    [[ -t 1 ]] && printf '\r%*s\r' "$TERM_WIDTH" ' '
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════
 # JSON OUTPUT (--json, local modules only)
 # ═══════════════════════════════════════════════════════════════
 record() {
@@ -200,9 +254,18 @@ command_exists() {
 }
 
 cleanup() {
+    [[ -n "$TICK_PID" ]] && kill "$TICK_PID" 2>/dev/null
     [[ -n "$TMPDIR" ]] && rm -rf "$TMPDIR"
     [[ -n "$DISK_FILE" ]] && rm -f "$DISK_FILE"
     return 0
+}
+
+strip_ansi() {
+    sed -e $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' -e 's/\r$//' -e 's/\r/\n/g'
+}
+
+mod_log() {
+    printf '%s/mod_%s.log' "$TMPDIR" "$1"
 }
 
 mask_ip() {
@@ -984,12 +1047,13 @@ show_summary() {
         printf "${BOLD}${YELLOW}  ⚠ Tests completed in ${minutes}m ${seconds}s${RESET}"
     fi
     printf "${DIM}${GRAY}  (${FAILS} failed, ${WARNS} warnings)${RESET}\n"
-    if [[ ${#MODULE_TIMES[@]} -gt 1 ]]; then
+    if [[ ${#MODULE_TIMES[@]} -gt 1 && $REPORT_MODE -eq 0 ]]; then
         local m
         for m in "${MODULE_TIMES[@]}"; do
             printf "${DIM}${GRAY}    %s${RESET}\n" "$m"
         done
     fi
+    [[ -n "$REPORT_FILE" ]] && printf "  ${GRAY}Full report saved:${RESET} ${CYAN}%s${RESET}\n" "$REPORT_FILE"
     printf "${DIM}${GRAY}  Generated on $(date '+%Y-%m-%d %H:%M:%S %Z') • server-bench v${VERSION}${RESET}\n"
     double_line
     echo ""
@@ -1019,6 +1083,9 @@ show_help() {
     printf "    ${CYAN}--yabs${RESET}         YABS: fio + iperf3 + Geekbench 6 (long!)\n"
     echo ""
     printf "  ${BOLD}Options:${RESET}\n"
+    printf "    ${CYAN}--live${RESET}         Stream test output live (default for a single module)\n"
+    printf "    ${CYAN}--report${RESET}       Progress + structured report + autosave to file\n"
+    printf "                   ${DIM}(default for multi-module runs on a terminal)${RESET}\n"
     printf "    ${CYAN}--json${RESET}         JSON to stdout (local modules only), report to stderr\n"
     printf "    ${CYAN}--hide-ip${RESET}      Mask public IPs (safe to paste results publicly)\n"
     printf "    ${CYAN}--no-install${RESET}   Never install packages\n"
@@ -1035,10 +1102,94 @@ show_help() {
 # MAIN
 # ═══════════════════════════════════════════════════════════════
 run_module() {
-    # run_module function "Title" — isolates a module & tracks its time
-    local fn="$1" title="$2" t0=$SECONDS
-    "$fn"
+    # run_module function "title" — live: stream; report: capture + checklist
+    local fn="$1" title="$2" t0=$SECONDS elapsed
+    if [[ $REPORT_MODE -eq 1 ]]; then
+        start_ticker "$title" "$DONE_MODULES" "$TOTAL_MODULES"
+        "$fn" >"$(mod_log "$title")" 2>&1
+        stop_ticker
+        DONE_MODULES=$((DONE_MODULES + 1))
+        DONE_TITLES+=("$title")
+        elapsed=$((SECONDS - t0))
+        printf "  ${CHECK} %-12s ${DIM}${GRAY}%dm %02ds${RESET}\n" \
+            "$title" $(( elapsed / 60 )) $(( elapsed % 60 ))
+    else
+        "$fn"
+    fi
     MODULE_TIMES+=("$(printf '%-16s %3ds' "$title" $((SECONDS - t0)))")
+}
+
+# ═══════════════════════════════════════════════════════════════
+# STRUCTURED REPORT (report mode)
+# ═══════════════════════════════════════════════════════════════
+report_kind() {
+    case "$1" in
+        info|disk|network|security|docker) echo "local" ;;   # replay as-is (our clean output)
+        speed-ru|speed-int)                echo "speed" ;;   # extract the speed tables
+        ip-check)                          echo "ipcheck" ;; # extract key findings (output is huge)
+        *)                                 echo "external" ;;# replay, CR-normalized
+    esac
+}
+
+save_report() {
+    # concatenate all captured logs, ANSI-stripped, into a plain-text file
+    local dir="" d f title
+    for d in "$PWD" "${HOME:-/root}" /tmp; do
+        [[ -d "$d" && -w "$d" ]] && { dir="$d"; break; }
+    done
+    [[ -n "$dir" ]] || return 0
+    f="${dir%/}/server-bench-$(date +%Y%m%d-%H%M%S).log"
+    {
+        printf 'server-bench v%s — full report — %s\n' "$VERSION" "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+        local title
+        for title in ${DONE_TITLES[@]+"${DONE_TITLES[@]}"}; do
+            [[ -s "$(mod_log "$title")" ]] && strip_ansi <"$(mod_log "$title")"
+        done
+    } >"$f" 2>/dev/null && REPORT_FILE="$f"
+    return 0
+}
+
+final_report() {
+    save_report
+    local title log lines
+    echo ""
+    double_line
+    printf "${BOLD}${WHITE}  📋 STRUCTURED REPORT${RESET}\n"
+    double_line
+    for title in ${DONE_TITLES[@]+"${DONE_TITLES[@]}"}; do
+        log=$(mod_log "$title")
+        [[ -s "$log" ]] || continue
+        case "$(report_kind "$title")" in
+            local)
+                cat "$log"
+                ;;
+            external)
+                sed -e 's/\r$//' -e 's/\r/\n/g' "$log"
+                ;;
+            speed)
+                header "$(tr '[:lower:]' '[:upper:]' <<<"$title") — KEY RESULTS" "full output in the report file"
+                lines=$(strip_ansi <"$log" \
+                    | grep -E 'Mbit|Mbps|MB/s|Upload|Download|Latency|Node|Speedtest' \
+                    | grep -vE '^[[:space:]]*$' | head -40)
+                if [[ -n "$lines" ]]; then
+                    printf '%s\n' "$lines"
+                else
+                    status_info "no speed lines captured — see the report file"
+                fi
+                ;;
+            ipcheck)
+                header "IP QUALITY — KEY FINDINGS" "full output in the report file"
+                lines=$(strip_ansi <"$log" \
+                    | grep -iE 'score|risk|fraud|abuse|proxy|vpn|tor|hosting|residential|native' \
+                    | head -30)
+                if [[ -n "$lines" ]]; then
+                    printf '%s\n' "$lines"
+                else
+                    status_info "could not extract key lines — see the report file"
+                fi
+                ;;
+        esac
+    done
 }
 
 main() {
@@ -1065,6 +1216,8 @@ main() {
             --dpi)        run_dpi=true ;;
             --yabs)       run_yabs=true ;;
             --quick)      run_quick=true ;;
+            --live)       LIVE_MODE=1 ;;
+            --report)     FORCE_REPORT=1 ;;
             --json)       JSON_MODE=1 ;;
             --hide-ip)    HIDE_IP=1 ;;
             --no-install) NO_INSTALL=1 ;;
@@ -1131,18 +1284,42 @@ main() {
         status_warn "curl is not available — IP detection and external modules will fail"
     fi
 
-    $run_info      && run_module test_system_info "info"
-    $run_disk      && run_module test_disk        "disk"
-    $run_network   && run_module test_network     "network"
-    $run_security  && run_module test_security    "security"
-    $run_docker    && run_module test_docker      "docker"
-    $run_ip        && run_module test_ip_check    "ip-check"
-    $run_ip_region && run_module test_ip_region   "ip-region"
-    $run_speed_ru  && run_module test_speed_ru    "speed-ru"
-    $run_speed_int && run_module test_speed_int   "speed-int"
-    $run_instagram && run_module test_instagram   "instagram"
-    $run_dpi       && run_module test_dpi         "dpi"
-    $run_yabs      && run_module test_yabs        "yabs"
+    local modules=()
+    $run_info      && modules+=("test_system_info:info")
+    $run_disk      && modules+=("test_disk:disk")
+    $run_network   && modules+=("test_network:network")
+    $run_security  && modules+=("test_security:security")
+    $run_docker    && modules+=("test_docker:docker")
+    $run_ip        && modules+=("test_ip_check:ip-check")
+    $run_ip_region && modules+=("test_ip_region:ip-region")
+    $run_speed_ru  && modules+=("test_speed_ru:speed-ru")
+    $run_speed_int && modules+=("test_speed_int:speed-int")
+    $run_instagram && modules+=("test_instagram:instagram")
+    $run_dpi       && modules+=("test_dpi:dpi")
+    $run_yabs      && modules+=("test_yabs:yabs")
+    TOTAL_MODULES=${#modules[@]}
+
+    # report mode: capture output, show a progress checklist, print a
+    # structured report at the end. Default for multi-module terminal runs;
+    # --live restores streaming, --report forces it even for one module.
+    if [[ $JSON_MODE -eq 0 ]]; then
+        if [[ $FORCE_REPORT -eq 1 ]]; then
+            REPORT_MODE=1
+        elif [[ $LIVE_MODE -eq 0 && $TOTAL_MODULES -gt 1 && -t 1 ]]; then
+            REPORT_MODE=1
+        fi
+    fi
+    if [[ $REPORT_MODE -eq 1 ]]; then
+        printf "  ${BOLD}Running %d modules${RESET} ${DIM}${GRAY}(output captured — structured report at the end)${RESET}\n\n" \
+            "$TOTAL_MODULES"
+    fi
+
+    local m
+    for m in ${modules[@]+"${modules[@]}"}; do
+        run_module "${m%%:*}" "${m##*:}"
+    done
+
+    [[ $REPORT_MODE -eq 1 ]] && final_report
 
     record "elapsed_s" "$SECONDS" num
     record "fails" "$FAILS" num
