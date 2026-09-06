@@ -23,34 +23,40 @@
 
 ## ⚡ Quick Start
 
-Run on any server, no installation needed:
+Run on a Linux server:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh)
+```
+
+Choose tests interactively (numbers/ranges, estimated duration, tool requirements):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --menu
 ```
 
 Quick health check (system info + network + security + docker, ~1 min):
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick
 ```
 
 Save results to a file:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick 2>&1 | tee bench-results.txt
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick 2>&1 | tee bench-results.txt
 ```
 
-> Dependencies (sysbench, fio, dnsutils) are installed automatically — but only
+> Dependencies (sysbench, fio, dnsutils, iperf3, jq) are installed automatically — but only
 > the ones the selected modules actually need. Use `--no-install` to forbid
-> any package installation.
+> any package installation; external scripts are skipped in this mode.
 
 **Report mode (v2.1):** when you run more than one module on a terminal, tests
 execute quietly behind a progress checklist (`[████░░░░] 44% ► speed-ru 2m 14s`),
 and a full **structured report** is printed once everything finishes — no more
 walls of text scrolling past. The complete plain-text report is also saved
-automatically to `./server-bench-<timestamp>.log`. Prefer the old streaming
-output? Add `--live`.
+automatically to `./server-bench-<timestamp>.log.<random>`. Prefer the old streaming
+output? Add `--live`. Reports are private (mode `600`), and concurrent runs get distinct files.
 
 ## 🧪 What It Tests
 
@@ -58,68 +64,85 @@ output? Add `--live`.
 |:---|:---|:---|:---|
 | 📋 System Info | `--info` | OS, CPU model/steal%/AES-NI, virtualization, RAM, disk usage, IP, geo, rDNS, sysbench CPU (1 + N threads) | ~30s |
 | 💾 Disk Bench | `--disk` | fio: sequential 1M read/write + 4K random IOPS, direct I/O on a real (non-tmpfs) path; dd fallback | ~1min |
-| 🌐 Network | `--network` | TCP stack (BBR? qdisc? MTU), outbound port 25, ping latency+loss, DNS resolution timing | ~30s |
+| 🌐 Network | `--network` | TCP stack (BBR? qdisc? MTU), outbound port 25, parallel ping latency+loss and DNS probes | ~15s |
 | 🔒 Security | `--security` | Effective sshd config (`sshd -T` incl. drop-ins), firewall (ufw/nft/iptables), fail2ban, pending updates | ~10s |
 | 🐳 Docker | `--docker` | Container status, counts, disk usage | ~5s |
 | 🔍 IP Check | `--ip` | IP reputation ([IP.Check.Place](https://ip.check.place)) + region detection ([ipregion](https://github.com/vernette/ipregion)) | ~3min |
-| 🇷🇺 Speed RU | `--speed-ru` | Speed test to Russian providers (bench.gig.ovh / bench.tlab.pw) | ~5min |
+| 🇷🇺 Speed RU | `--speed-ru` | Native iPerf3 to five Russian cities; separate upload and reverse download, 4 streams, 5s per direction | ~2min |
 | 🌍 Speed INT | `--speed-int` | Speed test to international providers (bench.sh / speed.tlab.pw) | ~5min |
+| 🌍 Geoblocks | `--geoblock` | Service geoblocking checks ([censorcheck](https://github.com/vernette/censorcheck), `--mode geoblock`) | ~2min |
 | 📸 Instagram | `--instagram` | Instagram audio block check (bench.openode.xyz) | ~30s |
 | 🛡️ DPI Check | `--dpi` | DPI censorship check for RU servers ([censorcheck](https://github.com/vernette/censorcheck)) | ~1min |
 | 📊 YABS | `--yabs` | Classic [yabs.sh](https://github.com/masonr/yet-another-bench-script): fio + iperf3 + Geekbench 6 | ~20min |
 
-`--all` (default) runs everything except `--instagram`, `--dpi` and `--yabs` — those are opt-in.
+`--all` (default) runs everything except `--geoblock`, `--instagram`, `--dpi` and `--yabs` — those are opt-in.
 
 ## 🎯 Usage
 
 ```bash
 # full test suite
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --all
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --all
 
 # quick health check
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick
 
 # pick what you need (flags combine)
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --info --disk --network
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --info --disk --network
 
 # machine-readable: JSON to stdout, human report to stderr
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --json --quick 2>/dev/null
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --json --quick 2>/dev/null
 
-# results you can paste publicly — public IPs masked (a.b.x.x)
-bash <(curl -Ls https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick --hide-ip
+# hide detected server IPs (a.b.x.x), hostname and rDNS
+bash <(curl -fsSL https://raw.githubusercontent.com/jestivald/server-bench/main/server-bench.sh) --quick --hide-ip
 ```
 
 ### Options
 
 | Flag | Effect |
 |:---|:---|
+| `--menu` | Interactive module selection; Enter starts the selection, `q` cancels |
+| `--list` | List modules, duration estimates and required tools without running anything |
 | `--report` | Progress checklist + structured report at the end + autosave to file (default for multi-module terminal runs) |
 | `--live` | Stream test output live as it happens (default for single-module runs) |
-| `--json` | JSON object to stdout (local modules only), pretty report goes to stderr |
-| `--hide-ip` | Mask public IPs in the report — safe to paste into forums/chats |
-| `--no-install` | Never install packages; tests degrade gracefully |
+| `--json` | JSON to stdout for built-in modules, including `--speed-ru`; human report to stderr |
+| `--hide-ip` | Mask detected server IPs and hide hostname/rDNS; skip external scripts |
+| `--no-install` | Never install packages; missing tools degrade gracefully and external scripts are skipped |
 | `--no-color` | Disable colors (the `NO_COLOR` env var works too) |
 | `--version` / `--help` | You guessed it |
+
+With only output/control flags, the default `--all` selection still applies. Use
+`--quick` for a shorter run. `--ip-check` and `--ip-region` select the two parts
+of `--ip` separately. `--menu` requires a terminal and cannot combine with `--json`.
 
 ### JSON output example
 
 ```json
-{"version":"2.0.0","os":"Debian GNU/Linux 12 (bookworm)","virt":"kvm",
+{"version":"2.3.0","os":"Debian GNU/Linux 12 (bookworm)","virt":"kvm",
  "cpu_cores":4,"cpu_eps_1t":2847.31,"cpu_steal_pct":0.3,
  "disk_seq_write_mbs":412.7,"disk_rand_read_iops":48210,
  "tcp_cc":"bbr","qdisc":"fq","ping_yandex_avg_ms":38.2,
- "ssh_password_auth":"no","fail2ban":"yes","fails":0,"warns":1}
+ "ssh_password_auth":"no","fail2ban":"yes",
+ "module_security_status":"warning","module_security_elapsed_s":2,
+ "fails":0,"warns":1,"skips":0}
 ```
+
+Module status keys use `ok`, `warning`, `failed` or `skipped`. Missing numeric
+measurements are `null`. RU throughput is in Mbps, for example
+`speed_ru_moscow_upload_mbps` and `speed_ru_moscow_download_mbps`.
+Legacy disk keys ending in `_mbs` contain MiB/s (fio KiB/s divided by 1024).
+A completed diagnostic run exits `0`, even when findings are present; automation
+should inspect `fails`, `warns` and module statuses. CLI/setup errors exit nonzero.
 
 ## 📋 Requirements
 
 - Linux (Debian, Ubuntu, CentOS, Fedora, AlmaLinux, Rocky)
-- bash 4+, curl
+- bash 4+, GNU coreutils (`timeout`), curl for IP/external checks
 - root **or** sudo recommended (auto-install + privileged checks); runs
   unprivileged too, with some checks skipped
 
-Every push is smoke-tested on a real Ubuntu runner: the full local suite
-(`--info --disk --network --security --docker`) must complete end-to-end.
+CI runs offline regressions on Ubuntu 22.04 and 24.04. Pull requests and main
+pushes also run the full local suite, validate measured fio/CPU values, and
+exercise real iPerf3 on loopback plus timeout cleanup. See [development notes](docs/V2.3-NOTES.md).
 
 ## 🔗 Under the Hood
 
@@ -130,22 +153,33 @@ scripts, executed at run time (with timeouts):
 |:---|:---|
 | IP reputation | [IP.Check.Place](https://ip.check.place) |
 | IP region | [vernette/ipregion](https://github.com/vernette/ipregion) |
-| DPI censorship | [vernette/censorcheck](https://github.com/vernette/censorcheck) |
-| RU speed | bench.gig.ovh, bench.tlab.pw |
+| DPI censorship / geoblocks | [vernette/censorcheck](https://github.com/vernette/censorcheck) |
 | International speed | [bench.sh](https://bench.sh) (teddysun), speed.tlab.pw |
 | Instagram audio | bench.openode.xyz |
 | YABS | [masonr/yet-another-bench-script](https://github.com/masonr/yet-another-bench-script) |
 
-Local modules (info/disk/network/security/docker) are self-contained and use
-`sysbench`, `fio`, `dd`, `ping`, `dig` directly.
+Built-in modules (info/disk/network/security/docker/speed-ru) call installed
+`sysbench`, `fio`, `dd`, `ping`, `dig`, `iperf3` and `jq` directly. The RU endpoint
+list comes from [itdoginfo/russian-iperf3-servers](https://github.com/itdoginfo/russian-iperf3-servers).
+The menu and geoblock additions were inspired by [saveksme/multitest](https://github.com/saveksme/multitest)
+and implemented independently. Server Bench saves its own report locally.
 
-> ⚠️ External modules download and execute third-party scripts. That is the
-> nature of this tool — all upstreams were security-audited (no backdoors,
-> no exfiltration, no persistence): see **[docs/UPSTREAM-AUDIT.md](docs/UPSTREAM-AUDIT.md)**
-> (snapshot 2026-07-06, with hashes). If your threat model can't accept
-> executing live upstream copies, stick to local modules.
+> External modules download and execute live third-party scripts. The historical
+> [upstream review](docs/UPSTREAM-AUDIT.md) describes its July snapshot, not later
+> upstream changes. `--json`, `--no-install` and `--hide-ip` skip those scripts.
+> IP.Check.Place keeps its `-p` privacy option; opt-in YABS can publish Geekbench results.
 
 ## 📝 Changelog
+
+**v2.3** — 2026-09-06
+- `--menu` / `--list`: choose checks, see approximate duration and tool requirements.
+- `--geoblock`: separate service geoblocking checks through censorcheck.
+- Native `--speed-ru`: real upload and download (`iperf3 -R`), bounded port retries, JSON metrics.
+- Parallel ping, DNS and IPv4/IPv6 probes; one batched dependency install and one apt refresh per run.
+- Correct fio error validation and 10-second random tests; full/unknown filesystems are skipped during path selection.
+- Fix UFW `inactive` detection, unknown SSH settings, stale update claims and Docker rows with empty ports.
+- Reliable JSON escaping, module statuses/timings, private unique reports and child-process timeouts.
+- `--no-install` / `--hide-ip` now skip external scripts; output-only flags correctly select the default suite.
 
 **v2.2** — 2026-07-06
 - External scripts get **"y" auto-answered** — no more hanging or dying on "continue? [y/n]" prompts (dependency installs are confirmed for you)

@@ -1,1 +1,3 @@
-server-bench-*.log
+server-bench-*.log*
+__pycache__/
+*.pyc

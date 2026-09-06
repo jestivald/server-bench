@@ -7,17 +7,36 @@ on:
   schedule:
     - cron: '17 4 * * 1'   # weekly: catch runner/env drift
 
+permissions:
+  contents: read
+
 jobs:
   local-modules:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: integration dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fio iperf3 jq
+      - name: real tools on loopback and temporary files
+        run: bash tests/integration.sh
       - name: full local suite
-        run: bash server-bench.sh --info --disk --network --security --docker --no-color
+        run: |
+          bash server-bench.sh --info --disk --network --security --docker --json > /tmp/server-bench-smoke.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('/tmp/server-bench-smoke.json').read_text())
+          for key in ('cpu_eps_1t', 'disk_seq_write_mbs', 'disk_seq_read_mbs', 'disk_rand_read_iops', 'disk_rand_write_iops'):
+              assert isinstance(data.get(key), (int, float)) and data[key] > 0, (key, data.get(key))
+          for module in ('info', 'disk', 'network', 'security', 'docker'):
+              assert f'module_{module}_status' in data, module
+          PY
       - name: json mode emits valid JSON
         run: bash server-bench.sh --json --security --no-install 2>/dev/null | python3 -m json.tool
       - name: report mode saves a file
         run: |
           bash server-bench.sh --report --security --no-install
-          ls -la server-bench-*.log
+          ls -la server-bench-*.log.*
