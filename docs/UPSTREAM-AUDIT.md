@@ -1,5 +1,10 @@
 # Upstream Script Audit
 
+> Historical v2.2 review, preserved as recorded on 2026-07-06. In v2.3, RU speed
+> uses an installed iPerf3 client directly and no longer executes bench.tlab.pw
+> or bench.gig.ovh. The new geoblock mode uses the existing censorcheck upstream.
+> See [v2.3 notes](V2.3-NOTES.md) for the current scope and reference snapshots.
+
 server-bench executes several well-known community scripts at run time.
 This is a point-in-time security review of every upstream we call — checked
 for backdoors, data exfiltration, persistence, obfuscated payloads and
